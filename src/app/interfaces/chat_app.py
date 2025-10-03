@@ -11,8 +11,8 @@ import json
 
 import streamlit as st
 
-from src.app.adapters import FinamAPIClient
-from src.app.core import call_llm, get_settings
+from app.adapters import FinamAPIClient
+from app.core import call_llm, get_settings
 
 
 def create_system_prompt() -> str:

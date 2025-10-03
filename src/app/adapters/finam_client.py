@@ -30,7 +30,7 @@ class FinamAPIClient:
 
         if self.access_token:
             self.session.headers.update({
-                "Authorization": f"Bearer {self.access_token}",
+                "Authorization": f"{self.access_token}",
                 "Content-Type": "application/json",
             })
 
@@ -52,6 +52,7 @@ class FinamAPIClient:
         url = f"{self.base_url}{path}"
 
         try:
+            print(method, url, kwargs, self.session.headers)
             response = self.session.request(method, url, timeout=30, **kwargs)
             response.raise_for_status()
 

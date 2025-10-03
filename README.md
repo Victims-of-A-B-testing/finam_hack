@@ -55,7 +55,6 @@ make metrics
 # или: poetry run calculate-metrics
 
 # Просмотр логов Docker
-make logs
 ```
 
 ## 🎯 Задача
