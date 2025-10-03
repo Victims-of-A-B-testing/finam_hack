@@ -14,6 +14,9 @@ python-dotenv = "^1.1.1"
 click = "^8.1.7"
 tqdm = "^4.67.1"
 streamlit = "^1.40.2"
+langgraph = "^0.2.60"
+langchain-core = "^0.3.28"
+langchain-openai = "^0.2.14"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.4.2"
@@ -74,7 +77,7 @@ docstring-code-format = true
 
 [tool.pytest.ini_options]
 minversion = "6.0"
-addopts = "-ra -q --cov=case_baseline --cov-report=term-missing --cov-report=html"
+addopts = "-ra -q"
 testpaths = ["tests"]
 python_files = "test_*.py"
 python_classes = "Test*"
