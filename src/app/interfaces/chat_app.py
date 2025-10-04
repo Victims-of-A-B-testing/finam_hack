@@ -8,11 +8,13 @@ Streamlit веб-интерфейс для AI ассистента трейде�
 """
 
 import json
-
+from pprint import pprint
 import streamlit as st
+import plotly
+import plotly.express as px
 
 from app.adapters import FinamAPIClient
-from app.core import call_llm, get_settings
+from app.core import call_llm, call_smolagents, get_settings
 
 
 def create_system_prompt() -> str:
@@ -50,6 +52,17 @@ def extract_api_request(text: str) -> tuple[str | None, str | None]:
                 return parts[0], parts[1]
     return None, None
 
+def extract_plotly_json(text: str) -> str | None:
+    """Извлечь Plotly JSON из ответа LLM"""
+    if "PLOTLY_JSON:" not in text:
+        return None
+
+    lines = text.split("\n")
+    for line in lines:
+        if line.strip().startswith("PLOTLY_JSON:"):
+            json_part = line.replace("PLOTLY_JSON:", "").strip()
+            return json_part
+    return None
 
 def main() -> None:  # noqa: C901
     """Главная функция Streamlit приложения"""
@@ -132,11 +145,32 @@ def main() -> None:  # noqa: C901
         # Получаем ответ от ассистента
         with st.chat_message("assistant"), st.spinner("Думаю..."):
             try:
-                response = call_llm(conversation_history, temperature=0.3)
-                assistant_message = response["choices"][0]["message"]["content"]
+                response = call_smolagents(conversation_history, temperature=0.3)
+                # Сохраняем полный ответ smolagents как JSON
+                with open("smolagents_response.json", "w", encoding="utf-8") as f:
+                    json.dump(response.steps, f, ensure_ascii=False, indent=2)
+                with st.expander("Посмотреть полный ответ от smolagents"):
+                    for step in response.steps:
+                        if "step_number" not in step:
+                            continue
+                        with st.expander(f"Шаг: {step["step_number"]}"):
+                            for msg in step["model_input_messages"]:
+                                if msg["role"] in ["tool-call", "tool-response"]:
+                                    with st.chat_message("assistant"):
+                                        st.markdown(msg["content"][0]["text"])
+
+                # Now, extract the message content to continue your app's logic
+                assistant_message = response.output
 
                 # Проверяем API запрос
                 method, path = extract_api_request(assistant_message)
+                plotly_json = extract_plotly_json(assistant_message)
+                if plotly_json:
+                    try:
+                        fig = plotly.io.from_json(plotly_json)
+                        st.plotly_chart(fig, use_container_width=True)
+                    except Exception as e:
+                        st.error(f"❌ Ошибка при отображении графика: {e}")
 
                 api_data = None
                 if method and path:
