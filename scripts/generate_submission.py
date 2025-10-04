@@ -23,8 +23,6 @@ from pathlib import Path
 import click
 from tqdm import tqdm  # type: ignore[import-untyped]
 
-from src.app.core.llm import call_llm
-
 
 def calculate_cost(usage: dict, model: str) -> float:
     """Рассчитать стоимость запроса на основе usage и модели"""
@@ -155,26 +153,82 @@ def generate_api_call(question: str, examples: list[dict[str, str]], model: str)
     Returns:
         tuple: (result_dict, cost_in_dollars)
     """
+    from src.app.core.llm import call_llm_with_tools
+
     prompt = create_prompt(question, examples)
 
     messages = [{"role": "user", "content": prompt}]
 
-    try:
-        response = call_llm(messages, temperature=0.0, max_tokens=20000)
-        llm_answer = response["choices"][0]["message"]["content"].strip()
+    max_retries = 3
+    last_error = None
 
-        method, request = parse_llm_response(llm_answer)
+    for attempt in range(max_retries):
+        try:
+            # Используем call_llm_with_tools для доступа к Finam API
+            response = call_llm_with_tools(messages, temperature=0.0, max_tokens=20000)
 
-        # Рассчитываем стоимость
-        usage = response.get("usage", {})
-        cost = calculate_cost(usage, model)
+            llm_answer = response["choices"][0]["message"]["content"].strip()
 
-        return {"type": method, "request": request}, cost
+            # Проверяем, были ли вызовы инструментов
+            tool_calls = response.get("tool_calls", [])
 
-    except Exception as e:
-        click.echo(f"⚠️  Ошибка при генерации для вопроса '{question[:50]}...': {e}", err=True)
-        # Возвращаем fallback
-        return {"type": "GET", "request": "/v1/assets"}, 0.0
+            # Проверяем, были ли ошибки при вызове API
+            has_error = False
+            error_message = ""
+
+            for tool_call in tool_calls:
+                result = tool_call.get("result")
+                if result and isinstance(result, dict) and ("error" in result or "status_code" in result):
+                    has_error = True
+                    error_message = f"API error: {result.get('error', 'Unknown error')}"
+                    if "details" in result:
+                        error_message += f" Details: {result['details']}"
+                    break
+
+            # Если была ошибка и это не последняя попытка, повторяем запрос
+            if has_error and attempt < max_retries - 1:
+                last_error = error_message
+                # Добавляем информацию об ошибке в контекст для следующей попытки
+                messages.append({"role": "assistant", "content": llm_answer})
+                messages.append(
+                    {
+                        "role": "user",
+                        "content": (
+                            f"Предыдущий запрос вернул ошибку: {error_message}. "
+                            "Пожалуйста, исправь запрос и попробуй снова."
+                        ),
+                    }
+                )
+                continue
+
+            # Парсим ответ LLM
+            method, request = parse_llm_response(llm_answer)
+
+            # Рассчитываем стоимость
+            usage = response.get("usage", {})
+            cost = calculate_cost(usage, model)
+
+            return {"type": method, "request": request}, cost
+
+        except Exception as e:
+            last_error = str(e)
+            if attempt < max_retries - 1:
+                # Добавляем информацию об ошибке для следующей попытки
+                messages.append(
+                    {
+                        "role": "user",
+                        "content": f"Произошла ошибка: {e}. Попробуй сформулировать запрос иначе.",
+                    }
+                )
+                continue
+
+            click.echo(f"⚠️  Ошибка при генерации для вопроса '{question[:50]}...': {e}", err=True)
+
+    # Если все попытки исчерпаны, возвращаем fallback
+    click.echo(
+        f"⚠️  Все попытки исчерпаны для вопроса '{question[:50]}...'. Последняя ошибка: {last_error}", err=True
+    )
+    return {"type": "GET", "request": "/v1/assets"}, 0.0
 
 
 @click.command()
