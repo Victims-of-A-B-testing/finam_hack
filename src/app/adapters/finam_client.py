@@ -7,6 +7,8 @@ import os
 from typing import Any
 
 import requests
+from transliterate import translit
+from Levenshtein import distance
 
 
 class FinamAPIClient:
@@ -52,7 +54,7 @@ class FinamAPIClient:
         url = f"{self.base_url}{path}"
 
         try:
-            print(method, url, kwargs, self.session.headers)
+            # print(method, url, kwargs, self.session.headers)
             response = self.session.request(method, url, timeout=30, **kwargs)
             response.raise_for_status()
 
@@ -135,3 +137,60 @@ class FinamAPIClient:
     def get_session_details(self) -> dict[str, Any]:
         """Получить детали текущей сессии"""
         return self.execute_request("POST", "/v1/sessions/details")
+
+    def find_asset_name(self, string: str) -> str:
+        """
+        Finds the closest matching asset symbol names to a given input string.
+
+        Args:
+            string (str): The input string to match against available asset names.
+
+        Returns:
+            List[str]: A list of up to 10 asset names most similar to the input string, sorted by similarity.
+
+        Note:
+            This function queries the Finam API for all available assets and uses a string distance metric
+            to determine the closest matches.
+
+        Example:
+            >>> find_asset_name("appl")
+            ['AAPL', 'APPLX', ...]
+        """
+        all_assets = self.execute_request("GET", "/v1/assets")
+
+        candidates = []
+        try:
+            candidates.append(translit(string, 'ru', reversed=True))
+        except Exception:
+            pass
+        try:
+            candidates.append(translit(string, 'ru'))
+        except Exception:
+            pass
+
+        # Remove duplicates and empty
+        candidates = list({c for c in candidates if c and isinstance(c, str)})
+
+        # print(candidates)
+
+        # Find closest for each candidate
+        closest_names = []
+        for cand in candidates:
+            closest = sorted(
+                all_assets.get("assets", []),
+                key=lambda a: min(
+                    distance(a["name"].lower(), cand.lower()),
+                    distance(a["symbol"].lower(), string.lower()),
+                )
+            )[:3]
+            closest_names.extend(closest)
+
+        # Remove duplicates by asset name
+        seen = set()
+        unique_closest = []
+        for a in closest_names:
+            if a["name"] not in seen:
+                unique_closest.append(a)
+                seen.add(a["name"])
+
+        return unique_closest
