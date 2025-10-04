@@ -70,6 +70,7 @@ def load_train_examples(train_file: Path, num_examples: int = 10) -> list[dict[s
     selected.extend(random.sample(post_examples, min(2, len(post_examples))))
     selected.extend(random.sample(delete_examples, min(1, len(delete_examples))))
 
+    return examples
     return selected[:num_examples]
 
 
@@ -159,7 +160,7 @@ def generate_api_call(question: str, examples: list[dict[str, str]], model: str)
     messages = [{"role": "user", "content": prompt}]
 
     try:
-        response = call_llm(messages, temperature=0.0, max_tokens=200)
+        response = call_llm(messages, temperature=0.0, max_tokens=20000)
         llm_answer = response["choices"][0]["message"]["content"].strip()
 
         method, request = parse_llm_response(llm_answer)
