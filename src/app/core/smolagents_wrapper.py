@@ -290,7 +290,7 @@ def create_smolagent(s):
 
     _plot_agent = CodeAgent(
         instructions="You are an expert in data visualization. Create plots using plotly based on user requests. Return plots as plotly JSON.",
-        tools=[], model=_model, additional_authorized_imports=["plotly"],
+        tools=[], model=_model, additional_authorized_imports=["plotly", "ast", "json", "pandas", "numpy"],
         name="plot_agent",
         description="Can create and show plots using plotly. Return plotly json",
         return_full_result=True
@@ -305,7 +305,7 @@ def create_smolagent(s):
         tools=finam_tools, model=_model,
         name="finam_agent",
         description="Can query Finam TradeAPI. Use find_asset_name to get correct asset symbol names",
-        additional_authorized_imports=["requests"],
+        additional_authorized_imports=["requests", "plotly", "ast", "json", "pandas", "numpy"],
         return_full_result=True
     )
 
@@ -346,7 +346,8 @@ def create_smolagent(s):
         tools=[], model=_model, managed_agents=[_finam_agent, _plot_agent],
         name="manager_agent",
         description="Can manage other agents",
-        return_full_result=True
+        return_full_result=True,
+        additional_authorized_imports=["plotly", "ast", "json", "pandas", "numpy"]
     )
     return _manager_agent
 

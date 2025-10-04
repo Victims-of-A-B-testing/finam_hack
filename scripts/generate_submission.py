@@ -36,6 +36,9 @@ def calculate_cost(usage: dict, model: str) -> float:
         "openai/gpt-3.5-turbo": {"prompt": 0.50, "completion": 1.50},
         "anthropic/claude-3-sonnet": {"prompt": 3.00, "completion": 15.00},
         "anthropic/claude-3-haiku": {"prompt": 0.25, "completion": 1.25},
+        "google/gemini-2.5-pro": {"prompt": 1.25, "completion": 10},
+        "google/gemini-2.5-flash": {"prompt": 0.3, "completion": 2.5},
+        "x-ai/grok-code-fast-1": {"prompt": 0.20, "completion": 1.5}
     }
 
     # Получаем цены для модели (по умолчанию как для gpt-4o-mini)
@@ -70,12 +73,13 @@ def load_train_examples(train_file: Path, num_examples: int = 10) -> list[dict[s
     selected.extend(random.sample(post_examples, min(2, len(post_examples))))
     selected.extend(random.sample(delete_examples, min(1, len(delete_examples))))
 
+    return examples
     return selected[:num_examples]
 
 
 def create_prompt(question: str, examples: list[dict[str, str]]) -> str:
     """Создать промпт для LLM с few-shot примерами"""
-    prompt = """Ты - эксперт по Finam TradeAPI. Твоя задача - преобразовать вопрос на русском языке в HTTP запрос к API.
+    prompt = r"""Ты - эксперт по Finam TradeAPI. Твоя задача - преобразовать вопрос на русском языке в HTTP запрос к API.
 
 API Documentation:
 - GET /v1/exchanges - список бирж
@@ -158,22 +162,24 @@ def generate_api_call(question: str, examples: list[dict[str, str]], model: str)
 
     messages = [{"role": "user", "content": prompt}]
 
-    try:
-        response = call_llm(messages, temperature=0.0, max_tokens=200)
-        llm_answer = response["choices"][0]["message"]["content"].strip()
+    while True:
+        try:
+            response = call_llm(messages, temperature=0.0, max_tokens=20000)
+            # print(response)
+            llm_answer = response["choices"][-1]["message"]["content"].strip()
 
-        method, request = parse_llm_response(llm_answer)
+            method, request = parse_llm_response(llm_answer)
 
-        # Рассчитываем стоимость
-        usage = response.get("usage", {})
-        cost = calculate_cost(usage, model)
+            # Рассчитываем стоимость
+            usage = response.get("usage", {})
+            cost = calculate_cost(usage, model)
 
-        return {"type": method, "request": request}, cost
+            return {"type": method, "request": request}, cost
 
-    except Exception as e:
-        click.echo(f"⚠️  Ошибка при генерации для вопроса '{question[:50]}...': {e}", err=True)
-        # Возвращаем fallback
-        return {"type": "GET", "request": "/v1/assets"}, 0.0
+        except Exception as e:
+            click.echo(f"⚠️  Ошибка при генерации для вопроса '{question[:50]}...': {e}", err=True)
+            # Возвращаем fallback
+            # return {"type": "GET", "request": "/v1/assets"}, 0.0
 
 
 @click.command()

@@ -13,10 +13,11 @@ def call_llm(messages: list[dict[str, str]], temperature: float = 0.2, max_token
         "model": s.openrouter_model,
         "messages": messages,
         "temperature": temperature,
+        # "plugins": [{ "id": "web" }]
     }
     if max_tokens:
         payload["max_tokens"] = max_tokens
-
+        
     r = requests.post(
         f"{s.openrouter_base}/chat/completions",
         headers={
